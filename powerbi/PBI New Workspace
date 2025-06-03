@@ -1,0 +1,14 @@
+$workspaceName = "<wsName>"
+
+# Connect-PowerBIServiceAccount
+
+# Check if it exists using -All
+$workspace = Get-PowerBIWorkspace -All | Where-Object { $_.Name -eq $workspaceName }
+
+if ($workspace) {
+    Write-Host "⏸️ Workspace '$workspaceName' already exists. No action taken." -ForegroundColor Yellow
+} else {
+    # Create it
+    $newWorkspace = New-PowerBIWorkspace -Name $workspaceName
+    Write-Host "✅ Created workspace '$($newWorkspace.Name)' (ID: $($newWorkspace.Id))" -ForegroundColor Green
+}
