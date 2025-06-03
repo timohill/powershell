@@ -1,5 +1,5 @@
 
-# remove comment tags for first run
+# remove connect comment tags for first run
 # Connect-PowerBIServiceAccount
 # Connect-AzureAD
 
