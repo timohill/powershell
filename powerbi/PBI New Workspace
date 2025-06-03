@@ -1,8 +1,7 @@
-$workspaceName = "<wsName>"
 
 # Connect-PowerBIServiceAccount
 
-# Check if it exists using -All
+$workspaceName = "<wsName>"
 $workspace = Get-PowerBIWorkspace -All | Where-Object { $_.Name -eq $workspaceName }
 
 if ($workspace) {
