@@ -1,0 +1,72 @@
+
+
+# Authenticate to Power BI
+# Connect-PowerBIServiceAccount
+
+$reportLimit = 5
+$skipReports = @("Report Usage Metrics Report")
+
+# Get all workspaces
+$workspaces = Get-PowerBIWorkspace -All | Select-Object -Skip 15 -First 5
+
+# Base download folder
+$rootOutputPath = "C:\tmp\PBI\"
+
+foreach ($workspace in $workspaces) {
+
+    # Get reports
+    $reports = Get-PowerBIReport -WorkspaceId $workspace.Id
+    $reportCount = $reports.Count
+
+    Write-Host "📁 Processing workspace: $($workspace.Name) - ℹ️ $reportCount reports" -ForegroundColor Cyan
+
+    if ($reportCount -eq 0) {
+        Write-Host "  ⚠️ No reports to export. Skipping..." -ForegroundColor DarkGray
+        continue
+    }
+
+    if ($reportCount -gt $reportLimit) {
+        Write-Host "  🚫 Too many reports ($reportCount > $reportLimit). Skipping..." -ForegroundColor Yellow
+        continue
+    }
+
+   # Create export folder
+    $outputPath = Join-Path -Path $rootOutputPath -ChildPath $workspace.Name
+    if (-not (Test-Path $outputPath)) {
+        New-Item -ItemType Directory -Path $outputPath | Out-Null
+    }
+
+    # Export reports
+    foreach ($report in $reports) {
+
+        if ($skipReports -contains $report.Name) {
+            Write-Warning "  ⚠️ Skipped known non-exportable report: '$($report.Name)'"
+            continue
+         }
+
+        $safeName = $report.Name -replace '[\\/:*?"<>|]', '_'
+        $baseFilePath = Join-Path $outputPath "$safeName.pbix"
+
+        if (Test-Path $baseFilePath) {
+            $timestamp = Get-Date -Format "yyyyMMddHHmmss"
+            $finalPath = Join-Path $outputPath "$safeName`_$timestamp.pbix"
+        } else {
+            $finalPath = $baseFilePath
+        }
+
+        Write-Host "  🔽 Downloading: $($report.Name)"
+
+        try {
+            $url = "https://api.powerbi.com/v1.0/myorg/groups/$($workspace.Id)/reports/$($report.Id)/Export"
+            Invoke-PowerBIRestMethod -Url $url -Method GET -OutFile $finalPath
+            Write-Host "  ✅ Saved: $finalPath" -ForegroundColor Green
+        } catch {
+            if ($_.Exception.Message -like "*ExportPBIX_ModelessWorkbookNotFound*") {
+                Write-Warning "  ⚠️ Skipped: '$($report.Name)' — not exportable (modeless or system report)." -ForegroundColor Yellow
+            } else {
+                Write-Host "  ❌ Failed to export '$($report.Name)': $($_.Exception.Message)" -ForegroundColor Red
+            }
+        }
+    }
+    Write-Host "-------------------------------------------------------------" -ForegroundColor DarkGray
+}
