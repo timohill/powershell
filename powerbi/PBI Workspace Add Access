@@ -1,0 +1,62 @@
+
+# remove comment tags for first run
+# Connect-PowerBIServiceAccount
+# Connect-AzureAD
+
+#### Variables
+
+$wsList = @(
+    # prinType = {User, Group} - accRight = {Admin, Member, Contributor, Viewer}
+    @{ wsName = "<wsName>"; secGrp = "<secGrp1>"; prinType = "Group"; accRight = "Admin" }
+    @{ wsName = "<wsName>"; secGrp = "<secGrp2>"; prinType = "Group"; accRight = "Admin" }
+    @{ wsName = "<wsName>"; secGrp = "<secGrp3>"; prinType = "Group"; accRight = "Member" }
+    #@{ workspaceName = "WorkspaceC"; secGrp = "Group3"; accessRight = "Viewer" }
+)
+
+foreach ($item in $wsList) {
+    $workspaceName = $item.wsName
+    $secGrp = $item.secGrp
+    $prinType = $item.prinType
+    $accRight = $item.accRight
+
+    Write-Host "🔍 Processing: $workspaceName | $secGrp | $accRight" -ForegroundColor Cyan
+
+    # Get workspace
+    $workspace = Get-PowerBIWorkspace -All | Where-Object { $_.Name -eq $workspaceName }
+    if (-not $workspace) {
+        Write-Error "  ❌ Workspace '$workspaceName' not found. Skipping..."
+        continue
+    }
+    Write-Host "  ✅ Workspace Id: $($workspace.Id)" -ForegroundColor Green
+
+    # Get group
+    $group = Get-AzureADGroup -Filter "displayName eq '$secGrp'"
+    if (-not $group) {
+        Write-Error "  ❌ Group '$secGrp' not found. Skipping..."
+        continue
+    }
+    Write-Host "  ✅ Group Id: $($group.ObjectId)" -ForegroundColor Green
+
+    
+    # Get existing users in workspace via API
+    $url = "https://api.powerbi.com/v1.0/myorg/groups/$($workspace.Id)/users"
+    $response = Invoke-PowerBIRestMethod -Url $url -Method GET
+    $parsed = $response | ConvertFrom-Json
+    $users = $parsed.value
+
+    # Check if group already exists
+    $exists = $users | Where-Object {
+        $_.identifier -eq $($group.ObjectId)
+    }
+
+    if ($exists) {
+        Write-Host "  ⏸️ Group already exists in workspace. No action needed." -ForegroundColor Green
+    } else {
+        Write-Host "  ➕ Group not found in workspace — adding as '$accRight'..." -ForegroundColor Yellow
+        Add-PowerBIWorkspaceUser -Id $workspace.Id -Identifier $group.ObjectId -PrincipalType $prinType -AccessRight $accRight
+    }
+
+    Write-Host "-------------------------------------------------------" -ForegroundColor DarkGray
+}
+
+####
